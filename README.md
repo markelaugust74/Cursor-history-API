@@ -1,120 +1,124 @@
-# Cursor Chat History Extractor & Vectorizer
+![Cursor Logo](https://github.com/user-attachments/assets/40469c95-e6d7-4ace-bf85-d7d88ce72c02)
 
-This project extracts chat history from local Cursor IDE an C:\Users\<name>\AppData\Roaming\Cursor\User\workspaceStorage, generates text embeddings for user prompts using a local Ollama instance with the `nomic-embed-text` model, and stores these prompts along with their embeddings in a LanceDB vector database.
+# Cursor Chat History Vectorizer & Dockerized Search API
 
-## Project Goal
+Vectorize your Cursor chat history and serve it via a simple search API.
 
-The primary goal is to make your Cursor chat history searchable and usable for Retrieval Augmented Generation (RAG) or other LLM-based analysis by converting user prompts into vector embeddings.
+This project provides tools to:
+1.  Extract chat history from local Cursor IDE data (`state.vscdb` files within workspace storage).
+2.  Generate text embeddings for user prompts using a local Ollama instance (`nomic-embed-text`).
+3.  Store the extracted prompts and their embeddings in a LanceDB vector database.
+4.  Include a Dockerized **FastAPI application (referred to as an "MCP server" in this context)** to search this LanceDB database via a simple API endpoint.
 
-## Features
+## ✨ Project Goal
 
-- Scans specified Cursor workspace storage paths for `state.vscdb` SQLite files.
-- Extracts user prompts from the `aiService.prompts` key within these database files.
-- Uses a locally running Ollama instance to generate embeddings for the extracted prompts.
-  - **Embedding Model:** `nomic-embed-text:latest` (default dimension 768).
-- Stores the original prompt text, source database file, user role, and the generated vector embedding in a LanceDB database.
-  - **LanceDB URI:** `./cursor_chat_history.lancedb`
-  - **Table Name:** `chat_history`
+The primary goal is to make your Cursor chat history searchable and usable for Retrieval Augmented Generation (RAG) or other LLM-based analysis by:
 
-## Requirements
+*   Converting user prompts into vector embeddings stored efficiently in LanceDB.
+*   Providing a simple and accessible API server to perform vector similarity searches against your vectorized history.
 
-1.  **Python 3.7+**
-2.  **Ollama:**
-    - Ensure Ollama is installed and running.
-    - Pull the `nomic-embed-text` model: `ollama pull nomic-embed-text:latest`
-3.  **Python Packages:**
+## 🚀 Features
+
+*   **Data Extraction:** Scans specified Cursor workspace storage paths for `state.vscdb` SQLite files.
+*   **Prompt Extraction:** Extracts user prompts from the `aiService.prompts` key within the database files.
+*   **Embedding Generation:** Uses a locally running Ollama instance to generate embeddings for extracted prompts.
+    *   **Embedding Model:** `nomic-embed-text:latest` (default dimension 768).
+*   **Vector Database Storage:** Stores original text, source file, role, and vector embeddings in a LanceDB database.
+    *   **LanceDB URI:** `./cursor_chat_history.lancedb` (for the extractor) / `/data/cursor_chat_history.lancedb` (inside Docker container)
+    *   **Table Name:** `chat_history`
+*   **Dockerized Search API:** Includes a `Dockerfile` to build a container for the FastAPI search server.
+*   **FastAPI Server (`main.py`):** Acts as the "MCP server" for handling search requests.
+*   **API Endpoints:**
+    *   `/search_chat_history` (POST): Performs vector similarity search.
+    *   `/health` (GET): Checks server status and connections (Ollama, LanceDB).
+
+## 📋 Requirements
+
+**For Running the Extraction Script (`cursor_history_extractor.py`):**
+
+*   **Python 3.7+**
+*   **Ollama:** Ensure Ollama is installed and running on your local machine. Pull the `nomic-embed-text` model:
     ```bash
-    pip install ollama lancedb pyarrow
+    ollama pull nomic-embed-text:latest
     ```
-    (Note: `sqlite3` and `json` are part of the Python standard library.)
+*   **Python Packages:** Install required packages:
+    ```bash
+    pip install ollama lancedb pyarrow pandas python-dotenv
+    ```
+*   **File Access:** Read access to your Cursor workspace storage directory (default: `C:\Users\<name>\AppData\Roaming\Cursor\User\workspaceStorage`).
 
-## Setup & Configuration
+**For Running the Search API (`main.py`) via Docker:**
+
+*   **Docker Desktop** (Windows/Mac) or **Docker Engine** (Linux).
+*   An **accessible Ollama instance** from the Docker container's network.
+*   The **LanceDB database directory** (`./cursor_chat_history.lancedb`) already created by the extraction script.
+
+## ⚙️ Setup & Configuration
+
+The process involves two main steps:
+
+1.  **Run the extraction script** to create or update the LanceDB database on your host machine.
+2.  **Build and run the Docker container** for the search API, mounting the database created in Step 1.
+
+### Step 1: Extract & Create Database (Host Machine)
 
 1.  **Clone/Download the Project:**
-    - git clone https://github.com/markelaugust74/Cursor-history-API.git
-2.  **Verify Paths (if necessary):**
-    - The script is hardcoded to look for Cursor data in `C:\\Users\\<name>\\AppData\\Roaming\\Cursor\\User\\workspaceStorage`. If your path is different, you'll need to update the `WORKSPACE_STORAGE_PATH` variable at the top of the `cursor_history_extractor.py` script.
-3.  **Ensure Ollama is Running:**
-    - Start your Ollama application/server.
-    - Verify the `nomic-embed-text:latest` model is available (e.g., run `ollama list` in your terminal).
-
-## How to Run
-
-1.  Navigate to the directory containing `cursor_history_extractor.py` in your terminal.
-2.  Execute the script:
+    ```bash
+    git clone https://github.com/markelaugust74/Cursor-history-API.git
+    cd Cursor-history-API
+    ```
+2.  **Install Python dependencies** for the extractor:
+    ```bash
+    pip install -r requirements.txt
+    ```
+3.  **Verify Paths (if necessary):**
+    *   Update the `WORKSPACE_STORAGE_PATH` variable in `cursor_history_extractor.py` if your Cursor data is not in the default location.
+    *   Ensure you have write permissions in the directory where you run the script, as `./cursor_chat_history.lancedb` will be created here.
+4.  **Ensure Ollama is Running:** Start your Ollama server and confirm `nomic-embed-text:latest` is available (`ollama list`).
+5.  **Execute the extraction script:**
     ```bash
     python cursor_history_extractor.py
     ```
-3.  The script will output its progress to the console, including:
-    - Workspace folders found.
-    - Database files found.
-    - Schema exploration of the first database.
-    - Inspection of target keys in each database.
-    - Number of prompts extracted.
-    - Progress of embedding generation.
-    - Status of LanceDB storage.
+    This script will print progress and, if successful, create the `./cursor_chat_history.lancedb` directory containing your vectorized history.
 
-## Output
+### Step 2: Build & Run API Docker Container
 
--   **`./cursor_chat_history.lancedb`**: A directory created in the same location where the script is run. This is the LanceDB vector database containing the `chat_history` table.
-    The table schema includes:
-    - `vector`: The 768-dimension embedding (list of floats).
-    - `text`: The original user prompt text (string).
-    - `source_db`: The name of the `state.vscdb` file from which the prompt was extracted (string).
-    - `role`: Currently hardcoded to "user" (string).
+1.  **Navigate** to the project directory containing the `Dockerfile`, `main.py`, and the `./cursor_chat_history.lancedb` directory created in Step 1.
+2.  **Build the Docker image:**
+    ```bash
+    docker build -t cursor-chat-search-api .
+    ```
+3.  **Run the Docker container:**
+    ```bash
+    docker run -p 8001:8001 \
+        -v /path/to/your/cursor_chat_history.lancedb:/data/cursor_chat_history.lancedb \
+        -e OLLAMA_HOST="http://host.docker.internal:11434" \
+        cursor-chat-search-api
+    ```
+    *   `-p 8001:8001`: Maps port 8001 on your host machine to port 8001 inside the container (where the FastAPI app runs).
+    *   `-v /path/to/your/cursor_chat_history.lancedb:/data/cursor_chat_history.lancedb`: **This is CRUCIAL.** Replace `/path/to/your/cursor_chat_history.lancedb` with the **absolute path** on your host machine to the `cursor_chat_history.lancedb` directory created by the extraction script. This mounts your host database into the container at `/data/cursor_chat_history.lancedb`, the location expected by `main.py`. (Use forward slashes for paths even on Windows in Docker commands, or ensure proper escaping/configuration).
+    *   `-e OLLAMA_HOST="..."`: Sets the `OLLAMA_HOST` environment variable inside the container. `http://host.docker.internal:11434` is common for Docker Desktop to reach the host. For Linux, you might need a different approach (e.g., host network mode, or using the host's IP accessible from the container).
+4.  The FastAPI application (your "MCP server") should now be running and accessible via `http://localhost:8001`.
 
-## Using the LanceDB Database
+## ▶️ How to Run
 
-Once the script has run successfully, you can interact with the LanceDB database in other Python scripts:
+The overall workflow is:
 
-```python
-import lancedb
-import ollama # For generating query embeddings
+1.  Execute `python cursor_history_extractor.py` periodically on your host machine to create/update `./cursor_chat_history.lancedb`.
+2.  Run the `docker run` command from the project root (where the `.lancedb` directory exists) to start the API server. This server will access the LanceDB database via the volume mount.
 
-# Connect to the DB and open the table
-db = lancedb.connect("./cursor_chat_history.lancedb")
-table = db.open_table("chat_history")
+## 📁 Output
 
-# Example: Perform a similarity search
-query_text = "How do I use Python with data analysis?"
+*   `./cursor_chat_history.lancedb`: A directory created by the extraction script containing the LanceDB vector database. Its schema includes `vector` (float list), `text` (string), `source_db` (string), and `role` (string).
+*   A running API server inside the Docker container, accessible externally via the mapped port (default 8001), providing the defined API endpoints.
 
-# Generate embedding for the query using the SAME model
-ollama_model_name = "nomic-embed-text:latest" # Make sure this matches
-try:
-    response = ollama.embeddings(model=ollama_model_name, prompt=query_text)
-    query_vector = response["embedding"]
+## 🔌 API Usage
 
-    # Search the table
-    search_results = table.search(query_vector).limit(5).to_pandas()
-    print("Search Results:")
-    print(search_results)
+Once the Docker container is running and the API is accessible (e.g., at `http://localhost:8001`), you can interact with it.
 
-except Exception as e:
-    print(f"Error during query or search: {e}")
+### Health Check (`GET /health`)
 
-# You can also inspect the table
-# print(table.schema)
-# print(f"Total rows: {len(table)}")
-# print(table.limit(3).to_pandas())
-```
+Checks the server's status and its connections to Ollama and LanceDB.
 
-## Troubleshooting & Notes
-
--   **Ollama Not Running:** If Ollama isn't running or the model isn't available, the embedding step will fail.
--   **LanceDB Errors:**
-    - Ensure you have write permissions in the directory where the script is run, as `./cursor_chat_history.lancedb` will be created there.
-    - If you encounter persistent LanceDB errors, deleting the `./cursor_chat_history.lancedb` directory and re-running the script can sometimes help.
--   **Empty Prompts:** The script identifies and skips empty or whitespace-only prompts, adding placeholder zero vectors for them. This is noted in the console output.
--   **AI Model Responses:** This script currently only extracts *user prompts*. The mechanism for reliably extracting corresponding AI model responses from the `state.vscdb` files has not been identified yet.
-
-## Future Enhancements (Potential)
-
--   Identify and extract AI model responses.
--   Extract timestamps for conversation ordering.
--   Add more metadata to the stored documents (e.g., workspace ID).
--   Allow configuration of paths and model names via command-line arguments or a .env file.
-
-
----
-
-This README provides a guide to understanding, setting up, and running the Cursor chat history extractor. 
+```bash
+curl http://localhost:8001/health
